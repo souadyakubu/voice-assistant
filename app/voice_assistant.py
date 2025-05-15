@@ -1,41 +1,41 @@
+# ==== Core imports ====
 import os
-from dotenv import load_dotenv
-import openai
-import speech_recognition as sr
-import pyttsx3
-import requests
-import webbrowser
+from dotenv import load_dotenv  # For loading environment variables from .env file
+import openai  # OpenAI API for chatbot capabilities
+import speech_recognition as sr  # For recognizing speech input
+import pyttsx3  # For text-to-speech conversion
+import requests  # For making API requests (e.g. weather)
+import webbrowser  # For opening URLs (e.g. Google search)
 
-import tkinter as tk
-from itertools import cycle
-from PIL import Image, ImageTk
-from threading import Thread
-import time
+# ==== GUI and Animation imports ====
+import tkinter as tk  # For building the desktop GUI
+from itertools import cycle  # To loop through GIF frames
+from PIL import Image, ImageTk  # For image handling in Tkinter
+from threading import Thread  # For running tasks without freezing the GUI
+import time  # For delays
 
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+# ==== Email handling imports ====
+import smtplib  # For sending emails via SMTP
+from email.mime.text import MIMEText  # For plain text email content
+from email.mime.multipart import MIMEMultipart  # For multipart email (subject + body)
 
-
-
-
+# ==== Supported Languages ====
 language_codes = {
     "english": {"speech_recognition": "en-US", "tts": "en"},
     "spanish": {"speech_recognition": "es-ES", "tts": "es"},
     "french": {"speech_recognition": "fr-FR", "tts": "fr"},
 }
 
-
 class VoiceAssistant:
     def __init__(self):
         self.recognizer = sr.Recognizer()
         self.engine = pyttsx3.init()
-        openai.api_key = os.getenv("OPENAI_API_KEY")  # Ensure you have set this environment variable
+        openai.api_key = os.getenv("OPENAI_API_KEY")  # Load OpenAI key from environment
         self.default_rate = self.engine.getProperty('rate')
-        self.current_language = "english"  
+        self.current_language = "english"  # Default language
 
     def listen(self):
-        '''Listen for audio and convert it to text in the currently selected language.'''
+        '''Capture voice input from microphone and convert it to text.'''
         lang_code = language_codes[self.current_language]["speech_recognition"]
         with sr.Microphone() as source:
             print("Listening...")
@@ -49,48 +49,48 @@ class VoiceAssistant:
                 return None
 
     def speak(self, text, rate=None):
-        '''Convert text to speech and play it out loud in the currently selected language.'''
+        '''Speak text out loud using the text-to-speech engine.'''
         if rate is not None:
             self.engine.setProperty('rate', rate)
         else:
-            # Reset to default rate if no specific rate is provided
-            default_rate = self.engine.getProperty('rate')
-            self.engine.setProperty('rate', default_rate)
-            
+            # Reset to default rate
+            self.engine.setProperty('rate', self.default_rate)
+
         lang = language_codes[self.current_language]["tts"]
         self.engine.say(text)
         self.engine.runAndWait()
 
     def change_language(self, language_name):
-        '''Change the current language of the assistant.'''
+        '''Change assistant's language for input/output.'''
         if language_name in language_codes:
             self.current_language = language_name
             self.speak("Language changed successfully.")
         else:
             self.speak("Sorry, I don't support that language yet.")
 
-    # Include other methods here (e.g., ask_openai, get_weather_info, search_google, draft_email, send_email)
-
     def format_email_address(self, spoken_email):
-        '''Format spoken email address into a proper email format.'''
+        '''Convert spoken email like "someone at gmail dot com" to valid email.'''
         email_address = spoken_email.lower().replace(" at ", "@").replace(" dot ", ".")
         return email_address
+
     def ask_openai(self, query):
-        '''Use OpenAI's API to generate a response to a query.'''
+        '''Query OpenAI and return its generated response.'''
         try:
             response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": query},
-            ]
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": query},
+                ]
             )
             return response.choices[0].message['content'].strip()
         except Exception as e:
-            print(f"An error occurred: {e}")
-            return "I'm sorry, but I'm unable to provide an answer at this time."
+            print(f"OpenAI Error: {e}")
+            return "I'm sorry, I couldn't get a response right now."
+
     def get_weather_info(self, city):
-        api_key =os.getenv("WEATHER_API_KEY") 
+        '''Get weather data for a given city using OpenWeatherMap API.'''
+        api_key = os.getenv("WEATHER_API_KEY") 
         url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
         response = requests.get(url)
         weather_data = response.json()
@@ -99,21 +99,22 @@ class VoiceAssistant:
             description = weather_data['weather'][0]['description']
             return f"The current weather in {city} is {description} with a temperature of {temperature}°C."
         else:
-            return "I'm sorry, I couldn't fetch the weather for you. Please make sure the city name is correct."
+            return "Couldn't fetch weather. Make sure the city name is valid."
+
     def search_google(self, query):
-        '''Perform a Google search for the specified query.'''
+        '''Search Google with the given query.'''
         search_url = "https://www.google.com/search?q=" + query
         webbrowser.open(search_url)
-        return f"I've performed a Google search for: {query}"
-    
+        return f"I've searched for: {query}"
+
     def draft_email(self, to, subject, body):
-        # Draft an email in the default email client
+        '''Open default email client with pre-filled draft.'''
         url = f"mailto:{to}?subject={subject}&body={body}"
         webbrowser.open(url)
-        return "I've opened your email client to draft an email."
+        return "Email draft opened."
 
     def send_email(self, sender, recipient, subject, body, password):
-        '''Send an email programmatically.'''
+        '''Send email using Gmail's SMTP server.'''
         msg = MIMEMultipart()
         msg['From'] = sender
         msg['To'] = recipient
@@ -127,16 +128,17 @@ class VoiceAssistant:
             server.sendmail(sender, recipient, msg.as_string())
             return "Email sent successfully."
         except smtplib.SMTPAuthenticationError:
-            return "Failed to send email. Authentication failed."
+            return "Authentication failed. Check your credentials."
         finally:
             server.quit()
 
-    # Your other methods (e.g., listen, speak, ask_openai)
+
     def sing(self, lyrics):
         '''Simulate singing by adjusting the speech rate and pitch.'''
-        self.speak(lyrics, rate=100)  # Adjust these values as needed
+        self.speak(lyrics, rate=100)  
 
     def start(self):
+        '''Main loop for command handling via voice.'''
         try:
             while True:
                 query = self.listen()
@@ -185,7 +187,7 @@ class VoiceAssistant:
             self.speak("Goodbye! Have a great day!")
             print("\nVoice Assistant has been stopped.")
         
-                # Add other functionalities like weather info, google search, etc.
+               
 
 
 class VoiceAssistantGUI(VoiceAssistant):
@@ -207,14 +209,14 @@ class VoiceAssistantGUI(VoiceAssistant):
         self.response_text = tk.Text(self.root, height=10, width=50)
         self.response_text.pack()
 
-        # Remove the listen button and start listening automatically
+        
         self.start_continuous_listening()
 
     def start_listening(self):
         """Start listening in a non-blocking manner."""
         listening_thread = Thread(target=self.listen_and_respond, daemon=True)
         listening_thread.start()
-    # Method to load frames from GIF
+    
     def load_gif_frames(self, path):
         frames = []
         img = Image.open(path)
@@ -230,7 +232,7 @@ class VoiceAssistantGUI(VoiceAssistant):
 
     def animate_gif(self, frame_index=0):
         if not self.is_speaking:
-            self.update_robot_image(self.static_img)  # Ensure static image is shown when not speaking
+            self.update_robot_image(self.static_img)  
             return
         self.update_robot_image(next(self.gif_frames))
         self.root.after(80, self.animate_gif) 
@@ -256,7 +258,6 @@ class VoiceAssistantGUI(VoiceAssistant):
         while True:
             self.listen_and_respond()
 
-    # Updated method for handling user commands and responses
     def listen_and_respond(self):
         self.update_response("Listening... Please speak now.")
         command = self.listen()
@@ -304,7 +305,7 @@ class VoiceAssistantGUI(VoiceAssistant):
                 body = self.listen()
                 body = body if body else "No Content"
                 
-                # Example sender information - replace with actual data or securely fetch them
+                
                 sender_email = "yaysou26@gmail.com"
                 sender_password = "Happyday123@"
                 
@@ -322,7 +323,7 @@ class VoiceAssistantGUI(VoiceAssistant):
             response = self.ask_openai(command)
 
         self.update_response(response)  # Update the GUI with the response
-        self.speak(response)  # Speak out the response (optional, could be removed if not desired)
+        self.speak(response) 
 
     def ask_openai(self, query):
         try:
